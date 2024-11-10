@@ -197,11 +197,19 @@ func (b *blur) At(x, y int) color.Color {
 // WrapEdges uses modulus to make an image infinitely repeat. The boundaries
 // are kept the same.
 func WrapEdges(img image.Image) *wrapEdges {
-	return &wrapEdges{img}
+	return &wrapEdges{
+		Image:    img,
+		viewport: img.Bounds(),
+	}
 }
 
 type wrapEdges struct {
 	image.Image
+	viewport image.Rectangle
+}
+
+func (we *wrapEdges) Bounds() image.Rectangle {
+	return we.viewport
 }
 
 func (we *wrapEdges) At(x, y int) color.Color {
@@ -214,4 +222,28 @@ func (we *wrapEdges) At(x, y int) color.Color {
 		y += we.Image.Bounds().Dy()
 	}
 	return we.Image.At(x+we.Image.Bounds().Min.X, y+we.Image.Bounds().Min.Y)
+}
+
+func (we *wrapEdges) Scroll(amount int) {
+	we.Pan(0, amount)
+}
+
+// Pan shifts the viewport around. x and y are in pixels.
+func (we *wrapEdges) Pan(x, y int) {
+	we.viewport = we.viewport.Add(image.Point{x, y})
+
+	// return if scrolling has not caused Viewport to stop intersecting with Canvas
+	if !we.viewport.Overlaps(we.Image.Bounds()) {
+		return
+	}
+
+	// If we got to here, that means we need to adjust Viewport so it's back to overlapping
+	// with Canvas. This doesn't matter for displaying the right pixels, as SoftScreen will wrap
+	// any out-of-bound requests, but to keep our infinite pan/scroll infinite, we need to reset
+	// the position of Viewport so we don't hit integer wrapping.
+
+	// If Viewport's lower X is past Canvas's Maximum X, shift viewport back to
+	// begining of Canvas
+
+	we.viewport = we.viewport.Sub(we.viewport.Min).Add(we.viewport.Min.Mod(we.Image.Bounds()))
 }
