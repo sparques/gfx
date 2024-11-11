@@ -12,6 +12,11 @@ type Scroller interface {
 	Scroll(amount int)
 }
 
+// RegionScroller is an interface for scrolling a subsection.
+type RegionScroller interface {
+	RegionScroll(region image.Rectangle, amount int)
+}
+
 // Blitter is an interface for writing a rectangle of pixels at a given offset.
 // A display driver might implement the blitter interface using low-level, efficient
 // instructions for transfering pixels. The idea behind this is it is faster than
@@ -48,12 +53,12 @@ type Image interface {
 func blit(dst Drawer, src Image, at image.Point) {
 	// Option 1
 	/*
-	forAllPix(src.Bounds(), func(x, y int) {
-		dst.Set(
-			x-src.Bounds().Min.X+at.X,
-			y-src.Bounds().Min.Y+at.Y,
-			src.At(x, y))
-	})
+		forAllPix(src.Bounds(), func(x, y int) {
+			dst.Set(
+				x-src.Bounds().Min.X+at.X,
+				y-src.Bounds().Min.Y+at.Y,
+				src.At(x, y))
+		})
 	*/
 
 	// Option 2 - Generate a rectangle the size of src, positioned at 'at' and ensure we only
