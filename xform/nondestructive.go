@@ -175,7 +175,7 @@ func (b *blur) At(x, y int) color.Color {
 	var i uint32
 	for sx := -1; sx < 2; sx++ {
 		for sy := -1; sy < 2; sy++ {
-			if sx < b.Image.Bounds().Min.X || sx > b.Image.Bounds().Max.X || sy < b.Image.Bounds().Min.Y || sy > b.Image.Bounds().Max.Y {
+			if !image.Pt(x+sx, y+sy).In(b.Image.Bounds()) {
 				continue
 			}
 			r, g, b, a := b.Image.At(x+sx, y+sy).RGBA()
