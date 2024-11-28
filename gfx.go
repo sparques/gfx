@@ -17,6 +17,19 @@ type RegionScroller interface {
 	RegionScroll(region image.Rectangle, amount int)
 }
 
+// VectorScroller is an interface for scrolling an image based on a vector.
+// If you can efficient implement VectorScroller, you can then implement
+// RegionScroller and Scroller via VectorScroller.
+type VectorScroller interface {
+	// VectorScroll scrolls an image by vector.X pixels in x, with postive
+	// values shifting the view port to the right, or the image to left, depending
+	// on how you want to look at it. Likewise, vector.Y scrolls in y, with
+	// postive values moving the viewport down or the image up.
+	// How the newly scrolled area is populated is implementation dependent,
+	// though simply wrapping the edges is perhaps the easiest way to do this.
+	VectorScroll(region image.Rectangle, vector image.Point)
+}
+
 // Blitter is an interface for writing a rectangle of pixels at a given offset.
 // A display driver might implement the blitter interface using low-level, efficient
 // instructions for transfering pixels. The idea behind this is it is faster than
