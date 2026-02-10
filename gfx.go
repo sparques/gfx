@@ -3,6 +3,7 @@ package gfx // import "github.com/sparques/gfx"
 import (
 	"image"
 	"image/color"
+	"image/draw"
 )
 
 // Scroller is an interface for implementing scrolling.
@@ -50,10 +51,7 @@ type Filler interface {
 }
 
 // Drawer not to be confused with draw.Drawer, but rather, draw.Image
-type Drawer interface {
-	Set(x, y int, c color.Color)
-	Bounds() image.Rectangle
-}
+type Drawer = draw.Image
 
 // Image is same as image.Image, except we don't care about the ColorModel()
 type Image interface {
@@ -61,9 +59,19 @@ type Image interface {
 	Bounds() image.Rectangle
 }
 
+// DoubleBufferer defines an interface such that writes/changes are bufferred
+// and Flush() must be called to actually write those changes.
+type DoubleBufferer interface {
+	Drawer
+	Flush()
+}
+
 // software implementation of blit
 // presumably hardware implementations are faster
+
+// check if images are the same type and have PixOffset()
 func blit(dst Drawer, src Image, at image.Point) {
+
 	// Option 1
 	/*
 		forAllPix(src.Bounds(), func(x, y int) {
@@ -117,8 +125,9 @@ func getRGBAPixelsIn(img image.Image, rect image.Rectangle) []color.RGBA {
 // fill sets all pixels in dst, where they intersect with r, to c.
 func fill(dst Drawer, r image.Rectangle, c color.Color) {
 	drawArea := dst.Bounds().Intersect(r)
+	native := dst.ColorModel().Convert(c)
 	forAllPix(drawArea, func(x, y int) {
-		dst.Set(x, y, c)
+		dst.Set(x, y, native)
 	})
 }
 

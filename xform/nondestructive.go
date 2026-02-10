@@ -3,6 +3,7 @@ package xform
 import (
 	"image"
 	"image/color"
+	"image/draw"
 	"math"
 )
 
@@ -39,6 +40,33 @@ func (t *translate) At(x, y int) color.Color {
 
 func (t *translate) Bounds() image.Rectangle {
 	return t.Image.Bounds().Sub(t.by)
+}
+
+func Scale(img draw.Image, by float64) *scale {
+	origBounds := img.Bounds()
+	return &scale{
+		Image: img,
+		scaledBounds: image.Rect(0, 0,
+			int(math.Round(float64(origBounds.Dx())*by)),
+			int(math.Round(float64(origBounds.Dy())*by)),
+		),
+		by: by,
+	}
+}
+
+type scale struct {
+	draw.Image
+	scaledBounds image.Rectangle
+	by           float64
+}
+
+func (s *scale) Bounds() image.Rectangle {
+	return s.scaledBounds
+}
+
+func (s *scale) At(x, y int) color.Color {
+	x, y = int(float64(x)/s.by), int(float64(y)/s.by)
+	return s.Image.At(x, y)
 }
 
 // MirrorHorizontal flips an image along its X-axis.
