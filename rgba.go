@@ -15,6 +15,7 @@ const (
 type RGBA struct {
 	*image.RGBA
 	doubleBuf *image.RGBA
+	dirty     image.Rectangle
 }
 
 func NewRGBA(base *image.RGBA) *RGBA {
@@ -30,11 +31,32 @@ func NewRGBAWithDoubleBuffer(base *image.RGBA) *RGBA {
 	return rgba
 }
 
+func (rgba *RGBA) Set(x, y int, c color.Color) {
+	rgba.dirtyAdd(image.Rect(x, y, x+1, y+1))
+	rgba.RGBA.Set(x, y, c)
+}
+
 func (rgba *RGBA) Flush() {
 	// TODO: partial updates / dirty rect
-	if rgba.doubleBuf != nil {
-		copy(rgba.doubleBuf.Pix, rgba.RGBA.Pix)
+	if rgba.doubleBuf == nil {
+		return
 	}
+
+	if rgba.dirty.Eq(rgba.RGBA.Bounds()) {
+		copy(rgba.doubleBuf.Pix, rgba.RGBA.Pix)
+	} else {
+		rgba.flush(rgba.dirty)
+	}
+
+	rgba.dirty = image.Rectangle{}
+}
+
+func (rgba *RGBA) dirtyAll() {
+	rgba.dirty = rgba.RGBA.Bounds()
+}
+
+func (rgba *RGBA) dirtyAdd(rect image.Rectangle) {
+	rgba.dirty = rgba.dirty.Union(rect)
 }
 
 // Scroll implements gfx.Scroller
@@ -43,11 +65,13 @@ func (rgba *RGBA) Scroll(amount int) {
 	case amount == 0:
 		return
 	case amount > 0:
+		rgba.dirtyAll()
 		if amount > rgba.Rect.Dy() {
 			amount = rgba.Rect.Dy()
 		}
 		copy(rgba.Pix, rgba.Pix[rgba.Stride*amount:])
 	case amount < 0:
+		rgba.dirtyAll()
 		amount *= -1
 		if amount > rgba.Rect.Dy() {
 			amount = rgba.Rect.Dy()
@@ -63,6 +87,7 @@ func (rgba *RGBA) RegionScroll(region image.Rectangle, amount int) {
 		return
 	}
 	// if amount is positive or negative, copy lines forwards or backwards
+	rgba.dirtyAdd(region)
 
 	var start, end int
 	if amount > 0 {
@@ -90,6 +115,8 @@ func (rgba *RGBA) VectorScroll(region image.Rectangle, vector image.Point) {
 	if region.Empty() || vector == (image.Point{}) {
 		return
 	}
+
+	rgba.dirtyAdd(region)
 	// The below is a bit verbose (could simplify it with a few if statements inside the for-loops).
 	// It is kept verbose for the sake of performance.
 
@@ -151,7 +178,7 @@ func (rgba *RGBA) VectorScroll(region image.Rectangle, vector image.Point) {
 	}
 }
 
-// Fill implements gfx.Filler. Whereever p overlaps with 'where', set those
+// Fill implements gfx.Filler. Whereever rgba overlaps with 'where', set those
 // pixels to color c.
 func (rgba *RGBA) Fill(where image.Rectangle, c color.Color) {
 	// get c as native color
@@ -162,6 +189,8 @@ func (rgba *RGBA) Fill(where image.Rectangle, c color.Color) {
 	if where.Empty() {
 		return
 	}
+
+	rgba.dirtyAdd(where)
 
 	// previously, I tried to be clever and used a maximum-run-length buffer and then
 	// copied that to the pix buffer and the below code is just as fast without
@@ -179,6 +208,10 @@ func (rgba *RGBA) Fill(where image.Rectangle, c color.Color) {
 }
 
 func (rgba *RGBA) Blit(src image.Image, where image.Point) {
+	srcBounds := src.Bounds()
+	destRect := image.Rect(0, 0, srcBounds.Dx(), srcBounds.Dy())
+	destRect = srcBounds.Intersect(destRect.Add(where))
+
 	// fast path,
 	gfxRGBA, okGFX := src.(*RGBA)
 	srcRGBA, okRGBA := src.(*image.RGBA)
@@ -190,13 +223,15 @@ func (rgba *RGBA) Blit(src image.Image, where image.Point) {
 			src = srcRGBA
 		}
 
-		srcBounds := src.Bounds()
-		destRect := image.Rect(0, 0, srcBounds.Dx(), srcBounds.Dy())
-		destRect = srcBounds.Intersect(destRect.Add(where))
+		// destRect := image.Rect(0, 0, srcBounds.Dx(), srcBounds.Dy())
+		// destRect = srcBounds.Intersect(destRect.Add(where))
+		// srcBounds := src.Bounds()
 
 		for yd, ys := destRect.Min.Y, srcBounds.Min.Y; yd < destRect.Max.Y && ys < srcBounds.Max.Y; {
 			for xd, xs := destRect.Min.X, srcBounds.Min.X; xd < destRect.Max.X && xs < srcBounds.Max.X; {
-				rgba.Pix[rgba.PixOffset(xd, yd)] = src.Pix[src.PixOffset(xs, ys)]
+				destOffset := rgba.PixOffset(xd, yd)
+				srcOffset := src.PixOffset(xs, ys)
+				copy(rgba.Pix[destOffset:destOffset+rgbaWidth:destOffset+rgbaWidth], src.Pix[srcOffset:srcOffset+4:srcOffset+4])
 				xd++
 				xs++
 			}
@@ -209,10 +244,19 @@ func (rgba *RGBA) Blit(src image.Image, where image.Point) {
 
 	// slow fall back
 	blit(rgba, src, where)
+
+	rgba.dirtyAdd(destRect)
 }
 
 func reverseCopy[E any](dst, src []E) {
 	for i := len(src) - 1; i >= 0; i-- {
 		dst[i] = src[i]
+	}
+}
+
+func (rgba *RGBA) flush(rect image.Rectangle) {
+	for y := rect.Min.Y; y < rect.Max.Y; y++ {
+		offset := rgba.PixOffset(rect.Min.X, y)
+		copy(rgba.doubleBuf.Pix[offset:offset+rgbaWidth*rect.Dx():offset+rgbaWidth*rect.Dx()], rgba.RGBA.Pix[offset:offset+rgbaWidth*rect.Dx():offset+rgbaWidth*rect.Dx()])
 	}
 }
