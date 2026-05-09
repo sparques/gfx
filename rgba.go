@@ -1,6 +1,7 @@
 package gfx
 
 import (
+	"fmt"
 	"image"
 	"image/color"
 	"image/draw"
@@ -37,7 +38,6 @@ func (rgba *RGBA) Set(x, y int, c color.Color) {
 }
 
 func (rgba *RGBA) Flush() {
-	// TODO: partial updates / dirty rect
 	if rgba.doubleBuf == nil {
 		return
 	}
@@ -124,7 +124,7 @@ func (rgba *RGBA) VectorScroll(region image.Rectangle, vector image.Point) {
 	// newOffset = stride * [ (y+y_offset+height) % height ] + rgbaWidth * [ (x+x_offset+width) % width]
 	//
 	// (d + d_offset + d_total) % d_total is the majority of the magic. Increment (or decrement) d by d_offset modulo
-	// the maximum of our working dimention. The extra addition of the maximum work dimension is to take care of negative
+	// the maximum of our working dimension. The extra addition of the maximum work dimension is to take care of negative
 	// offsets.
 	var dst, src int
 	if vector.Y > 0 {
@@ -258,5 +258,54 @@ func (rgba *RGBA) flush(rect image.Rectangle) {
 	for y := rect.Min.Y; y < rect.Max.Y; y++ {
 		offset := rgba.PixOffset(rect.Min.X, y)
 		copy(rgba.doubleBuf.Pix[offset:offset+rgbaWidth*rect.Dx():offset+rgbaWidth*rect.Dx()], rgba.RGBA.Pix[offset:offset+rgbaWidth*rect.Dx():offset+rgbaWidth*rect.Dx()])
+	}
+}
+
+type ScaledRGBA struct {
+	*RGBA
+	Scaled *RGBA
+
+	scale int
+}
+
+func NewScaledRGBA(Scaled *RGBA, scale int) *ScaledRGBA {
+	x := Scaled.Bounds().Dx()
+	y := Scaled.Bounds().Dy()
+	var orig *image.RGBA
+	switch {
+	case scale > 1:
+		orig = image.NewRGBA(image.Rect(0, 0, x/scale, y/scale))
+		fmt.Printf("%v\n", orig.Bounds())
+	case scale < -1:
+		orig = image.NewRGBA(image.Rect(0, 0, x*-scale, y*-scale))
+	default:
+	}
+	return &ScaledRGBA{
+		RGBA:   NewRGBA(orig),
+		Scaled: Scaled,
+		scale:  scale,
+	}
+}
+
+/*
+func (srgba *ScaledRGBA) Set(x, y int, c color.Color) {
+	srgba.RGBA.Set(x,y,c)
+	for sx := 0; sx < srgba.scale; sc++ {
+		for sy := 0; sy < srgba.Scale; sy++ {
+			srgba.Scaled.Set(x+sx,y+sy, c)
+		}
+	}
+}
+*/
+
+func (srgba *ScaledRGBA) Flush() {
+	b := srgba.Bounds()
+	for y := b.Min.Y; y < b.Max.Y; y++ {
+		for x := b.Min.X; x < b.Max.X; x++ {
+			pix := srgba.At(x, y)
+			for d := 0; d < srgba.scale*srgba.scale; d++ {
+				srgba.Scaled.Set(x*srgba.scale+d%srgba.scale, y*srgba.scale+d/srgba.scale, pix)
+			}
+		}
 	}
 }

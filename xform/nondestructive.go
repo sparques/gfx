@@ -69,6 +69,37 @@ func (s *scale) At(x, y int) color.Color {
 	return s.Image.At(x, y)
 }
 
+type scaleInt struct {
+	draw.Image
+	scaledBounds image.Rectangle
+	by           uint
+}
+
+func (s *scaleInt) Bounds() image.Rectangle {
+	return s.scaledBounds
+}
+
+func (s *scaleInt) At(x, y int) color.Color {
+	x, y = x/int(s.by), y/int(s.by)
+	return s.Image.At(x, y)
+}
+
+func (s *scaleInt) Set(x, y int, c color.Color) {
+	s.Image.Set(x/int(s.by), y/int(s.by), c)
+}
+
+func ScaleInt(img draw.Image, by uint) *scaleInt {
+	origBounds := img.Bounds()
+	return &scaleInt{
+		Image: img,
+		scaledBounds: image.Rect(0, 0,
+			origBounds.Dx()*int(by),
+			origBounds.Dy()*int(by),
+		),
+		by: by,
+	}
+}
+
 // MirrorHorizontal flips an image along its X-axis.
 func MirrorHorizontal(img image.Image) *mirrorHorizontal {
 	return &mirrorHorizontal{img}

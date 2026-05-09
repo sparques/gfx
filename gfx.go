@@ -66,43 +66,6 @@ type DoubleBufferer interface {
 	Flush()
 }
 
-// software implementation of blit
-// presumably hardware implementations are faster
-
-// check if images are the same type and have PixOffset()
-func blit(dst Drawer, src Image, at image.Point) {
-
-	// Option 1
-	/*
-		forAllPix(src.Bounds(), func(x, y int) {
-			dst.Set(
-				x-src.Bounds().Min.X+at.X,
-				y-src.Bounds().Min.Y+at.Y,
-				src.At(x, y))
-		})
-	*/
-
-	// Option 2 - Generate a rectangle the size of src, positioned at 'at' and ensure we only
-	// operate on valid bits of both (via Intersect())
-	// rect := image.Rect(0, 0, src.Bounds().Dx(), src.Bounds().Dy()).Add(at).Intersect(dst.Bounds())
-	// srcXOffset := -at.X + src.Bounds().Min.X
-	// srcYOffset := -at.Y + src.Bounds().Min.Y
-	// forAllPix(rect, func(x, y int) {
-	// 	dst.Set(x, y, src.At(x+srcXOffset, y+srcYOffset))
-	// })
-
-	// Option 3 - calculate the offsets of xDst and yDst; iterate over all the pixels in src and using
-	// xDst and yDst, update pixels in dst.
-	xDst := -src.Bounds().Min.X + at.X
-	yDst := -src.Bounds().Min.Y + at.Y
-	forAllPix(src.Bounds(), func(x, y int) {
-		dst.Set(
-			x+xDst,
-			y+yDst,
-			src.At(x, y))
-	})
-}
-
 // getRGBAPixels uses a slice of
 func getRGBAPixels(img image.Image) []color.RGBA {
 	return getRGBAPixelsIn(img, img.Bounds())
